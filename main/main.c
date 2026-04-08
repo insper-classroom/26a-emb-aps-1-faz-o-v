@@ -95,7 +95,7 @@ static volatile int flag_start   = 0;
 // ── Countdown (hardware timer alarm) ────────────────────────────────────────
 static volatile int  countdown_remaining = 0;
 static volatile bool countdown_tick      = false;
-static alarm_id_t    countdown_alarm_id  = 0;
+static volatile alarm_id_t countdown_alarm_id = 0;
 
 // ── Estado LCD (local a main, sem globals) ─────────────────────────────────
 
