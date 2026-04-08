@@ -97,9 +97,7 @@ static volatile int  countdown_remaining = 0;
 static volatile bool countdown_tick      = false;
 static alarm_id_t    countdown_alarm_id  = 0;
 
-// ── Estado LCD ──────────────────────────────────────────────────────────────
-static int  current_score = 0;
-static char current_status[32] = "AGUARDANDO...";
+// ── Estado LCD (local a main, sem globals) ─────────────────────────────────
 
 // ── IRQ: botoes ─────────────────────────────────────────────────────────────
 void btn_callback(uint gpio, uint32_t events) {
@@ -114,9 +112,11 @@ void btn_callback(uint gpio, uint32_t events) {
 int64_t countdown_alarm_callback(alarm_id_t id, void *user_data) {
     if (countdown_remaining > 0) {
         countdown_tick = true;
-        countdown_remaining--;
+        countdown_remaining = countdown_remaining - 1;
         return -1000000;
     }
+    countdown_remaining = 0;
+    countdown_alarm_id  = 0;
     return 0;
 }
 
@@ -129,6 +129,8 @@ void pwm_interrupt_handler() {
         wav_pos++;
         if (wav_pos >= (wav_len << 3)) {
             wav_pos    = 0;
+            wav_buf    = NULL;
+            wav_len    = 0;
             is_playing = 0;
         }
         return;
@@ -143,6 +145,9 @@ void pwm_interrupt_handler() {
         return;
     }
 
+    bg_playing = 0;
+    bg_buf     = NULL;
+    bg_len     = 0;
     pwm_set_gpio_level(AUDIO_PIN, 0);
 }
 
@@ -165,7 +170,6 @@ void draw_score_label() {
 }
 
 void draw_score(int score) {
-    current_score = score;
     gfx_fillRect(0, SCORE_VALUE_Y, SCREEN_W, 50, ILI9341_BLACK);
     char buf[8];
     snprintf(buf, sizeof(buf), "%d", score);
@@ -176,8 +180,6 @@ void draw_score(int score) {
 }
 
 void draw_status(const char *status) {
-    strncpy(current_status, status, sizeof(current_status) - 1);
-    current_status[sizeof(current_status) - 1] = '\0';
     gfx_fillRect(0, STATUS_Y, SCREEN_W, 50, ILI9341_BLACK);
     gfx_setTextSize(2);
 
@@ -198,8 +200,8 @@ void draw_full_screen() {
     gfx_clear();
     draw_title();
     draw_score_label();
-    draw_score(current_score);
-    draw_status(current_status);
+    draw_score(0);
+    draw_status("AGUARDANDO...");
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -326,7 +328,7 @@ int wait_button(uint32_t timeout_ms) {
         uint32_t msg = multicore_fifo_pop_blocking();
 
         if ((msg & 0xF0) == MSG_TICK_BASE) {
-            printf("  [TIMER] %d\n", msg & 0x0F);
+            printf("  [TIMER] %u\n", msg & 0x0F);
         } else if (msg == MSG_TIMEOUT) {
             printf("  TIMEOUT!\n");
             return -1;
